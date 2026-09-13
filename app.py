@@ -6,13 +6,12 @@ from pptx import Presentation
 from pptx.util import Inches, Pt
 from pptx.dml.color import RGBColor
 import urllib.request
-import requests
 import os
 import io
 
 # 1. 頁面設定
 st.set_page_config(page_title="工程自修與廠商比價審查系統", layout="wide")
-st.title("🏗️ 工程自編預算、單項價格拆解與精確 API 查核比價系統")
+st.title("🏗️ 工程自編預算、單項價格拆解與比價審查系統")
 
 # 2. 自動載入繁體中文字型
 font_path = "CustomFont.otf"
@@ -24,7 +23,7 @@ if not os.path.exists(font_path):
         )
 my_font = fm.FontProperties(fname=font_path)
 
-# 3. 預設資料庫（已校正為 100% 可連線之官方決標與行情查詢入口）
+# 3. 預設工程與比價數據（已移除所有超連結與出處）
 raw_data = {
     "項目名稱": ["高壓進水泵浦檢修", "流量計儀表校正", "管線更新工程", "控制盤材料採購", "廠區緊急清淤"],
     "施工項目 / 內容描述": [
@@ -48,65 +47,28 @@ raw_data = {
     "廠商A_文書雜項 (元)": [10000, 3000, 5000, 2000, 20000],
 
     # 廠商 B 總價
-    "廠商B_總報價 (元)": [135000, 22000, 70000, 30000, 140000],
-    
-    # 精確官方查詢系統 (均已驗證連結有效性)
-    "核實出處說明": [
-        "工程會公共工程價格資料庫", 
-        "主計總處薪資與生產力統計", 
-        "政府電子採購網歷史決標查詢", 
-        "政府電子採購網歷史決標查詢", 
-        "政府開放資料平臺大宗資材行情"
-    ],
-    "直達價格查詢超連結": [
-        "https://pcces.pcc.gov.tw/",
-        "https://www.stat.gov.tw/",
-        "https://web.pcc.gov.tw/tps/pss/bizmode/compositeSearch.do?method=init&searchMode=common",
-        "https://web.pcc.gov.tw/tps/pss/bizmode/compositeSearch.do?method=init&searchMode=common",
-        "https://data.gov.tw/dataset/7374"
-    ]
+    "廠商B_總報價 (元)": [135000, 22000, 70000, 30000, 140000]
 }
 
 df_orig = pd.DataFrame(raw_data)
 
-st.subheader("📋 自編預算與比價資料編輯（縱向排列／直觀對照）")
+st.subheader("📋 自編預算與比價資料編輯（縱向對照）")
 
 # 轉置表格供縱向檢視與編輯
-df_editable_fields = df_orig.drop(columns=["直達價格查詢超連結"])
-df_transposed = df_editable_fields.set_index("項目名稱").T
+df_transposed = df_orig.set_index("項目名稱").T
 
 edited_transposed = st.data_editor(
     df_transposed,
     use_container_width=True,
-    height=430
+    height=400
 )
 
-# 還原編輯後的資料並接回網址
+# 還原編輯後的資料
 df = edited_transposed.T.reset_index()
-df["直達價格查詢超連結"] = raw_data["直達價格查詢超連結"]
-
-# 4. 獨立長官直達驗證清單（非表格內連結，絕不跳出鍵盤、直達查詢頁）
-st.markdown("---")
-st.subheader("🔍 長官專用：精確價格與標案底價直達驗證專區")
-st.caption("點擊下方獨立連結可直接開啟官方價格查詢或決標系統，無須手動搜尋或點擊表格：")
-
-grid_cols = st.columns(2)
-for idx, r in df.iterrows():
-    col = grid_cols[idx % 2]
-    with col:
-        with st.container(border=True):
-            st.markdown(f"**📌 項目 {idx+1}：{r['項目名稱']}** （{r['設備屬性 / 註記']}）")
-            st.markdown(f"• **內容描述**：{r['施工項目 / 內容描述']}")
-            st.markdown(f"• **核實依據**：{r['核實出處說明']}")
-            st.link_button(
-                f"🔗 點此直達【{r['核實出處說明']}】進行比價與底價查詢", 
-                r["直達價格查詢超連結"],
-                use_container_width=True
-            )
 
 st.markdown("---")
 
-# 5. 核心計算與效益分析
+# 4. 核心計算與效益分析
 if st.button("🚀 開始計算自修效益與單項報價分析", type="primary"):
     if df.empty or "項目名稱" not in df.columns:
         st.error("請確保表格資料完整！")
@@ -141,7 +103,7 @@ if st.button("🚀 開始計算自修效益與單項報價分析", type="primary
         total_vendor_b = df["廠商 B 總報價 (元)"].sum()
         total_saved = df["自修較廠商A節省 (元)"].sum()
 
-        # 6. 頂部核心指標
+        # 5. 頂部核心指標
         st.subheader("📊 長官審查核心效益指標")
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("自修總成本 (材料+人工+雜項)", f"NT$ {total_self_cost:,.0f}")
@@ -149,27 +111,26 @@ if st.button("🚀 開始計算自修效益與單項報價分析", type="primary
         c3.metric("廠商 B 總報價", f"NT$ {total_vendor_b:,.0f}")
         c4.metric("本期自修共計節省", f"NT$ {total_saved:,.0f}", f"整體降低 {((total_saved/total_vendor_a)*100 if total_vendor_a>0 else 0):.1f}% 成本")
 
-        # 7. 縱向對比綜合審查表
-        st.subheader("📑 綜合審查對比表（包含單項拆解：材料 / 人工 / 文書雜項）")
+        # 6. 縱向對比綜合審查表
+        st.subheader("📑 綜合審查對比表（單項拆解：材料 / 人工 / 文書雜項）")
         
         show_transposed = df[[
             "項目名稱", "設備屬性 / 註記", "施工項目 / 內容描述",
             "自修總成本 (元)", "廠商 A 總報價 (元)", "廠商 B 總報價 (元)", "自修較廠商A節省 (元)",
             "自修_材料費 (元)", "自修_人工費 (元)", "自修_文書雜項費 (元)",
-            "廠商A_材料費 (元)", "廠商A_人工費 (元)", "廠商A_文書雜項 (元)",
-            "核實出處說明"
+            "廠商A_材料費 (元)", "廠商A_人工費 (元)", "廠商A_文書雜項 (元)"
         ]].set_index("項目名稱").T
 
         st.dataframe(show_transposed, use_container_width=True)
 
-        # 8. 重大設備摘要
+        # 7. 重大設備摘要
         st.subheader("⚠️ 重大設備修繕與自修效益摘要")
         major_items = df[df["設備屬性 / 註記"].str.contains("重大設備", na=False)]
         if not major_items.empty:
             major_saved = major_items["自修較廠商A節省 (元)"].sum()
             st.success(f"🌟 本期包含 **{len(major_items)}** 項【重大設備修繕】，採自修處置共為單位防禦性節省外修費用 **NT$ {major_saved:,.0f} 元**！")
 
-        # 9. 圖表呈現
+        # 8. 圖表呈現
         st.subheader("📈 自修總成本 vs 多廠商報價走勢比較圖")
         fig, ax = plt.subplots(figsize=(10, 4.5), dpi=150)
         x = range(len(df["項目名稱"]))
@@ -188,7 +149,7 @@ if st.button("🚀 開始計算自修效益與單項報價分析", type="primary
         plt.tight_layout()
         st.pyplot(fig)
 
-        # 10. PPT 與 Excel 匯出
+        # 9. PPT 與 Excel 匯出
         img_buf = io.BytesIO()
         plt.savefig(img_buf, format="png")
         img_buf.seek(0)
@@ -203,14 +164,14 @@ if st.button("🚀 開始計算自修效益與單項報價分析", type="primary
         slide2 = prs.slides.add_slide(prs.slide_layouts[6])
         txBox = slide2.shapes.add_textbox(Inches(0.8), Inches(0.5), Inches(8), Inches(1))
         p = txBox.text_frame.paragraphs[0]
-        p.text = "自修效益與數據核實摘要"
+        p.text = "自修效益數據摘要"
         p.font.size = Pt(26)
         p.font.bold = True
         p.font.color.rgb = RGBColor(0, 51, 102)
 
         txBox2 = slide2.shapes.add_textbox(Inches(0.8), Inches(1.3), Inches(8.5), Inches(1.8))
         p2 = txBox2.text_frame.paragraphs[0]
-        p2.text = f"• 自修預估總成本：NT$ {total_self_cost:,.0f} 元 (含材料、人工與雜費)\n• 廠商 A 總報價：NT$ {total_vendor_a:,.0f} 元 | 廠商 B：NT$ {total_vendor_b:,.0f} 元\n• 效益評估：採自修方案共節省外修費用 NT$ {total_saved:,.0f} 元。\n• 精確查核：已對接政府電子採購網歷史決標與工程會大宗資材系統。"
+        p2.text = f"• 自修預估總成本：NT$ {total_self_cost:,.0f} 元 (含材料、人工與雜費)\n• 廠商 A 總報價：NT$ {total_vendor_a:,.0f} 元 | 廠商 B：NT$ {total_vendor_b:,.0f} 元\n• 效益評估：採自修方案共節省外修費用 NT$ {total_saved:,.0f} 元。"
         p2.font.size = Pt(16)
 
         slide2.shapes.add_picture("chart.png", Inches(0.8), Inches(3.2), width=Inches(8.4))
