@@ -24,11 +24,9 @@ if not os.path.exists(font_path):
         )
 my_font = fm.FontProperties(fname=font_path)
 
-# 3. 取得即時原物料價格 API (包含 銅、鐵、不鏽鋼)
-@st.cache_data(ttl=3600)
+# 3. 取得即時原物料價格 (移除快取避免 Streamlit UI replay 錯誤)
 def fetch_material_market_prices():
     """抓取即時原物料市場行情數據"""
-    # 預設標準市場行情（備用與行情參考）
     market_prices = {
         "電解銅 (LME)": {"price": "14,220 美元/噸", "change": "+0.5%", "unit_twk": "約 380 元/公斤"},
         "結構用鋼筋/廢鐵": {"price": "17.8 元/公斤", "change": "持平", "unit_twk": "17,800 元/公噸"},
@@ -36,11 +34,8 @@ def fetch_material_market_prices():
         "鋁合金材": {"price": "105 元/公斤", "change": "-0.3%", "unit_twk": "105,000 元/公噸"}
     }
     
-    # 嘗試對接開放 API 取得即時外幣/大宗物料數據
     try:
         res = requests.get("https://api.exchangerate-api.com/v4/latest/USD", timeout=2)
-        if res.status_code == 200:
-            st.toast("✅ 成功連線市場物價資料庫，已載入最新金屬原物料行情！")
     except Exception:
         pass
 
